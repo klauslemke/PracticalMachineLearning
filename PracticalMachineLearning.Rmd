@@ -1,22 +1,63 @@
 ---
 title: "PracticalMachineLearning"
 author: "klauslemke"
-date: "Wednesday, June 18, 2014"
+date: "Thursday, June 19, 2014"
 output: html_document
 ---
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+This is an R Markdown document for a Practical Machine Learning assignment.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
+#-- library definitions
+```{r}
+library(caret)
+library(rattle)
+library(rpart)
+```
+#-- training data
 ```{r}
 pml.training <- read.csv("C:/COURSERA/Machine Learning II/pml-training.csv")
 ```
-
-You can also embed plots, for example:
-
+#-- remove variables 
+```{r}
+##- sequential counter, user name, time stamps, windows
+train <- pml.training[,-(1:7)]
+##- near zero variables (defined in caret package)
+train <- train[,-nearZeroVar(train)]
+##- variables with very large counts of missing values 
+train <- train[, colSums(is.na(train)) < 19000]
+##- variables with pairwise correlation greater than 0.90 
+train <- train[, -findCorrelation(cor(train[,1:52]), 0.90)]
+```
+#-- rpart fit
+```{r}
+rpartFit <- rpart(classe ~., data=train, control=rpart.control(maxdepth=10))
+```
+#-- fancy rpart fit plot
 ```{r, echo=FALSE}
-plot(pml.training$classe)
+fancyRpartPlot(rpartFit)
+```
+#-- testing data
+```{r}
+pml.testing <- read.csv("C:/COURSERA/Machine Learning II/pml-testing.csv")
+```
+#-- rpart predictions
+```{r}
+rpartPred <- predict(rpartFit, newdata=pml.testing)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+rpartPred contains probabilities for classes A to E.
+My answers are based on the largest probability across the classes.
+
+```{r}
+answers <- c("C","A","C","C","A","C","D","D","A","A",
+             "B","B","C","A","E","A","A","B","B","B")
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+```
+
