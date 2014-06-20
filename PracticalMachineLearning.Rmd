@@ -1,0 +1,110 @@
+---
+title: "PracticalMachineLearning"
+author: "klauslemke"
+date: "Friday, June 20, 2014"
+output: html_document
+---
+
+This is an R Markdown document for the Practical Machine Learning assignment.
+
+#-- library definitions
+```{r}
+library(caret)
+library(rattle)
+library(rpart)
+library(randomForest)
+```
+#-- training data
+```{r}
+pml.training <- read.csv("C:/COURSERA/Machine Learning II/pml-training.csv")
+```
+#-- partitions
+```{r}
+set.seed(345618)
+inTrain <- createDataPartition(y=pml.training$classe, p=3/4, list=FALSE)
+training <- pml.training[inTrain,]
+testing <- pml.training[-inTrain,]
+```
+#-- remove variables 
+```{r}
+##- sequential counter, user name, time stamps, windows
+train <- training[,-(1:7)]
+##- near zero variables (defined in caret package)
+train <- train[,-nearZeroVar(train)]
+##- variables with very large counts of missing values 
+train <- train[, colSums(is.na(train)) < 10000]
+##- variables with pairwise correlation greater than 0.90 
+train <- train[, -findCorrelation(cor(train[,1:ncol(train)-1]), 0.90)]
+```
+#-- rpart fit
+```{r}
+rpartFit <- rpart(classe ~ ., data=train)
+```
+##- list of rules
+```{r}
+asRules(rpartFit)
+```
+#-- rpart predictions on testing data
+```{r}
+rpartPred <- predict(rpartFit, newdata=testing)
+rpartPredict <- colnames(rpartPred)[apply(rpartPred,1,function(i){which(i==max(i))})]
+rpartClass <- as.vector(testing[,ncol(testing)])
+```
+#-- evaluation of rpart predictions
+```{r}
+rpartEval <- cbind(rpartPredict,rpartClass)
+```
+##- about 70% accuracy on test data (about 30% OOB error)
+```{r}
+confusionMatrix(rpartPredict, rpartClass)
+```
+#-- rpart fit using train function
+```{r}
+rpartFit2 <- train(classe ~ ., preProcess=c("center","scale"), method="rpart", data=train)
+```
+##- tree plot
+```{r, echo=FALSE}
+fancyRpartPlot(rpartFit2$finalModel)
+```
+##- only about 50% accuracy (no improvement)
+```{r}
+rpartFit2
+```
+#-- random forest fit
+```{r}
+rfFit <- randomForest(classe ~ ., data=train, ntree=100)
+```
+##- out of bag (OOB) estimate of error rate is less than 1% !
+```{r}
+rfFit
+```
+#-- random forest predictions on testing data
+```{r}
+rfPred <- as.character(predict(rfFit, newdata=testing))
+rfEval <- cbind(rfPred,rpartClass)
+```
+##- more than 99% accuracy on test data (<1% OOB error)
+```{r}
+confusionMatrix(rfPred, rpartClass)
+```
+#-- validation data
+```{r}
+pml.testing <- read.csv("C:/COURSERA/Machine Learning II/pml-testing.csv")
+```
+#-- random forest predictions on validation data
+```{r}
+rfPredVal <- as.character(predict(rfFit, newdata=pml.testing))
+rfPredVal
+```
+#-- write files
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(rfPredVal)
+```
+end of document
